@@ -186,7 +186,8 @@ def create_run_directory(location: str) -> str:
   Returns:
     A UUID directory name.
   """
-  timestamp = datetime.datetime.now().strftime('%Y%m%dT%H%M%S%f')
+  local_timezone = datetime.timezone(datetime.timedelta(hours=8))
+  timestamp = datetime.datetime.now(local_timezone).strftime('%Y%m%dT%H%M%S%f')
   return os.path.join(location, f'run_{timestamp}')
 
 
