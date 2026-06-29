@@ -4,6 +4,7 @@
 # Byte-compiled
 _pycache__/
 .cache/
+runs/
 
 # Poetry, setuptools, PyPI distribution artifacts.
 /*.egg-info
