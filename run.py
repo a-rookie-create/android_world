@@ -42,9 +42,6 @@ from android_world.env import interface
 
 logging.set_verbosity(logging.WARNING)
 
-os.environ['GRPC_VERBOSITY'] = 'ERROR'  # Only show errors
-os.environ['GRPC_TRACE'] = 'none'  # Disable tracing
-
 
 def _find_adb_directory() -> str:
   """Returns the directory where adb is located."""
