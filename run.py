@@ -33,6 +33,7 @@ from android_world.agents import base_agent
 from android_world.agents import human_agent
 from android_world.agents import infer
 from android_world.agents import m3a
+from android_world.agents import mobile_agent_v2
 from android_world.agents import random_agent
 from android_world.agents import seeact
 from android_world.agents import t3a
@@ -48,6 +49,11 @@ os.environ['GRPC_TRACE'] = 'none'  # Disable tracing
 def _find_adb_directory() -> str:
   """Returns the directory where adb is located."""
   potential_paths = [
+      os.path.join(os.environ.get('ANDROID_HOME', ''), 'platform-tools', 'adb'),
+      os.path.join(
+          os.environ.get('ANDROID_SDK_ROOT', ''), 'platform-tools', 'adb'
+      ),
+      '/data2/zst/biye/android-sdk/platform-tools/adb',
       os.path.expanduser('~/Library/Android/sdk/platform-tools/adb'),
       os.path.expanduser('~/Android/Sdk/platform-tools/adb'),
   ]
@@ -129,6 +135,26 @@ _OUTPUT_PATH = flags.DEFINE_string(
 
 # Agent specific.
 _AGENT_NAME = flags.DEFINE_string('agent_name', 'm3a_gpt4v', help='Agent name.')
+_MOBILE_AGENT_V2_API_URL = flags.DEFINE_string(
+    'mobile_agent_v2_api_url',
+    os.environ.get('MOBILE_AGENT_V2_API_URL', ''),
+    'OpenAI-compatible chat completions API URL for Mobile-Agent-v2.',
+)
+_MOBILE_AGENT_V2_API_TOKEN = flags.DEFINE_string(
+    'mobile_agent_v2_api_token',
+    os.environ.get('MOBILE_AGENT_V2_API_TOKEN', ''),
+    'Bearer token for the Mobile-Agent-v2 OpenAI-compatible API.',
+)
+_MOBILE_AGENT_V2_MODEL = flags.DEFINE_string(
+    'mobile_agent_v2_model',
+    os.environ.get('MOBILE_AGENT_V2_MODEL', 'gpt-4o'),
+    'Model name sent to the Mobile-Agent-v2 OpenAI-compatible API.',
+)
+_MOBILE_AGENT_V2_ADD_INFO = flags.DEFINE_string(
+    'mobile_agent_v2_add_info',
+    mobile_agent_v2.DEFAULT_ADD_INFO,
+    'Extra operational hint appended to the Mobile-Agent-v2 action prompt.',
+)
 
 _FIXED_TASK_SEED = flags.DEFINE_boolean(
     'fixed_task_seed',
@@ -178,6 +204,14 @@ def _get_agent(
   # SeeAct.
   elif _AGENT_NAME.value == 'seeact':
     agent = seeact.SeeAct(env)
+  elif _AGENT_NAME.value == 'mobile_agent_v2':
+    agent = mobile_agent_v2.MobileAgentV2(
+        env,
+        api_url=_MOBILE_AGENT_V2_API_URL.value,
+        token=_MOBILE_AGENT_V2_API_TOKEN.value,
+        model=_MOBILE_AGENT_V2_MODEL.value,
+        add_info=_MOBILE_AGENT_V2_ADD_INFO.value,
+    )
 
   if not agent:
     raise ValueError(f'Unknown agent: {_AGENT_NAME.value}')

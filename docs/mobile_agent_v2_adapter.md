@@ -162,7 +162,6 @@ Stop
 ```text
 Open app (...) -> JSONAction(action_type="open_app", app_name=...)
 Tap (x, y)     -> JSONAction(action_type="click", x=x, y=y)
-Type (...)     -> JSONAction(action_type="input_text", text=..., index=...)
 Back           -> JSONAction(action_type="navigate_back")
 Home           -> JSONAction(action_type="navigate_home")
 Stop           -> AgentInteractionResult(done=True, data=step_data)
@@ -175,7 +174,9 @@ Stop           -> AgentInteractionResult(done=True, data=step_data)
 如果后续改成方向型 prompt，再映射为 `JSONAction(action_type="scroll" 或
 "swipe", direction=...)`。
 
-`Type` 需要谨慎处理：第一版优先找当前 focused/editable UI element；找不到就记录错误，不强行输入。
+`Type` 也直接通过 AndroidWorld controller 调 `adb_utils.type_text(...)`。
+AndroidWorld 标准 `input_text` 会在输入后自动按 Enter，和 V2 原始 `type()`
+行为不完全一致。
 
 解析失败、参数越界、动作执行异常时，参考 M3A/T3A：记录 `summary` 和
 `execution_error`，返回 `AgentInteractionResult(done=False, data=step_data)`，
