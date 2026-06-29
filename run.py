@@ -79,6 +79,12 @@ _EMULATOR_SETUP = flags.DEFINE_boolean(
     ' before running Android World. After an emulator is setup, this flag'
     ' should always be False.',
 )
+_SETUP_ONLY = flags.DEFINE_boolean(
+    'setup_only',
+    False,
+    'If True, exit after emulator setup without initializing an agent or'
+    ' running tasks. Intended to create AndroidWorld app snapshots.',
+)
 _DEVICE_CONSOLE_PORT = flags.DEFINE_integer(
     'console_port',
     5554,
@@ -235,6 +241,10 @@ def _main() -> None:
       emulator_setup=_EMULATOR_SETUP.value,
       adb_path=_ADB_PATH.value,
   )
+  if _SETUP_ONLY.value:
+    print('Finished emulator setup. Exiting because --setup_only is set.')
+    env.close()
+    return
 
   n_task_combinations = _N_TASK_COMBINATIONS.value
   task_registry = registry.TaskRegistry()
