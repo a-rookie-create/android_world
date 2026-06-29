@@ -22,6 +22,44 @@ from android_world.env import interface
 import termcolor
 
 
+def _print_if_present(
+    data: dict[str, Any],
+    key: str,
+    label: str,
+    print_fn: Callable[[str], None],
+) -> None:
+  value = data.get(key)
+  if value is None or value == '':
+    return
+  print_fn(f'{label}:\n{value}')
+
+
+def _print_step_details(
+    step_number: int,
+    data: dict[str, Any],
+    print_fn: Callable[[str], None],
+) -> None:
+  """Prints agent internals that are useful while watching an episode."""
+  if not any(key.startswith('v2_') for key in data):
+    return
+
+  print_fn('\n' + '=' * 80)
+  print_fn(f'Mobile-Agent-v2 step {step_number}')
+  print_fn('=' * 80)
+  _print_if_present(data, 'v2_raw_response', 'Model output', print_fn)
+  _print_if_present(data, 'v2_thought', 'Parsed thought', print_fn)
+  _print_if_present(data, 'v2_action', 'Parsed action', print_fn)
+  _print_if_present(
+      data, 'v2_operation_summary', 'Operation summary', print_fn
+  )
+  _print_if_present(data, 'execution_result', 'Execution result', print_fn)
+  _print_if_present(data, 'execution_error', 'Execution error', print_fn)
+  _print_if_present(data, 'reflection_output', 'Reflection output', print_fn)
+  _print_if_present(data, 'planning_output', 'Planning output', print_fn)
+  _print_if_present(data, 'memory_output', 'Memory output', print_fn)
+  print_fn('=' * 80 + '\n')
+
+
 @dataclasses.dataclass()
 class EpisodeResult:
   """Represents an episode of an agent interacting with the environment.
@@ -79,6 +117,7 @@ def run_episode(
   output = []
   for step_n in range(max_n_steps):
     result = agent.step(goal)
+    _print_step_details(step_n + 1, result.data, print_fn)
     print_fn('Completed step {:d}.'.format(step_n + 1))
     assert constants.STEP_NUMBER not in result.data
     output.append(result.data | {constants.STEP_NUMBER: step_n})
