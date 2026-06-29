@@ -22,6 +22,7 @@ command-line flags.
 
 from collections.abc import Sequence
 import os
+import shutil
 
 from absl import app
 from absl import flags
@@ -33,8 +34,8 @@ from android_world.agents import base_agent
 from android_world.agents import human_agent
 from android_world.agents import infer
 from android_world.agents import m3a
+from android_world.agents import mobile_agent_v2
 from android_world.agents import random_agent
-from android_world.agents import seeact
 from android_world.agents import t3a
 from android_world.env import env_launcher
 from android_world.env import interface
@@ -47,6 +48,18 @@ os.environ['GRPC_TRACE'] = 'none'  # Disable tracing
 
 def _find_adb_directory() -> str:
   """Returns the directory where adb is located."""
+  adb_from_path = shutil.which('adb')
+  if adb_from_path:
+    return adb_from_path
+
+  android_home = os.environ.get('ANDROID_HOME') or os.environ.get(
+      'ANDROID_SDK_ROOT'
+  )
+  if android_home:
+    env_adb_path = os.path.join(android_home, 'platform-tools', 'adb')
+    if os.path.isfile(env_adb_path):
+      return env_adb_path
+
   potential_paths = [
       os.path.expanduser('~/Library/Android/sdk/platform-tools/adb'),
       os.path.expanduser('~/Android/Sdk/platform-tools/adb'),
@@ -183,7 +196,17 @@ def _get_agent(
     agent = m3a.M3A(env, infer.Gpt4Wrapper('gpt-4-turbo-2024-04-09'))
   # SeeAct.
   elif _AGENT_NAME.value == 'seeact':
+    from android_world.agents import seeact  # pylint: disable=g-import-not-at-top
+
     agent = seeact.SeeAct(env)
+  elif _AGENT_NAME.value == 'mobile_agent_v2':
+    agent = mobile_agent_v2.MobileAgentV2Agent(
+        env,
+        mobile_agent_v2.MobileAgentV2Config.from_env(
+            adb_path=_ADB_PATH.value,
+            console_port=_DEVICE_CONSOLE_PORT.value,
+        ),
+    )
 
   if not agent:
     raise ValueError(f'Unknown agent: {_AGENT_NAME.value}')
