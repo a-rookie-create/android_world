@@ -23,6 +23,7 @@ command-line flags.
 from collections.abc import Sequence
 import os
 import shutil
+import sys
 
 from absl import app
 from absl import flags
@@ -41,6 +42,60 @@ from android_world.env import env_launcher
 from android_world.env import interface
 
 logging.set_verbosity(logging.WARNING)
+
+
+class _TeeStream:
+  """Writes stream output to the original stream and a log file."""
+
+  def __init__(self, stream, log_file):
+    self._stream = stream
+    self._log_file = log_file
+
+  def write(self, data):
+    self._stream.write(data)
+    self._log_file.write(data)
+    self.flush()
+
+  def flush(self):
+    self._stream.flush()
+    self._log_file.flush()
+
+  def isatty(self):
+    return self._stream.isatty()
+
+  @property
+  def encoding(self):
+    return self._stream.encoding
+
+  def fileno(self):
+    return self._stream.fileno()
+
+
+class _RunLogTee:
+  """Mirrors stdout and stderr into a run log file."""
+
+  def __init__(self, log_path: str):
+    self._log_path = log_path
+    self._log_file = None
+    self._stdout = None
+    self._stderr = None
+
+  def __enter__(self):
+    os.makedirs(os.path.dirname(self._log_path), exist_ok=True)
+    self._log_file = open(self._log_path, 'a', buffering=1, encoding='utf-8')
+    self._stdout = sys.stdout
+    self._stderr = sys.stderr
+    sys.stdout = _TeeStream(self._stdout, self._log_file)
+    sys.stderr = _TeeStream(self._stderr, self._log_file)
+    return self
+
+  def __exit__(self, exc_type, exc_value, exc_tb):
+    del exc_type, exc_value, exc_tb
+    sys.stdout.flush()
+    sys.stderr.flush()
+    sys.stdout = self._stdout
+    sys.stderr = self._stderr
+    self._log_file.close()
 
 
 def _find_adb_directory() -> str:
@@ -222,55 +277,58 @@ def _get_agent(
 
 def _main() -> None:
   """Runs eval suite and gets rewards back."""
-  env = env_launcher.load_and_setup_env(
-      console_port=_DEVICE_CONSOLE_PORT.value,
-      emulator_setup=_EMULATOR_SETUP.value,
-      adb_path=_ADB_PATH.value,
-  )
-  if _SETUP_ONLY.value:
-    print('Finished emulator setup. Exiting because --setup_only is set.')
-    env.close()
-    return
-
-  n_task_combinations = _N_TASK_COMBINATIONS.value
-  task_registry = registry.TaskRegistry()
-  suite = suite_utils.create_suite(
-      task_registry.get_registry(family=_SUITE_FAMILY.value),
-      n_task_combinations=n_task_combinations,
-      seed=_TASK_RANDOM_SEED.value,
-      tasks=_TASKS.value,
-      use_identical_params=_FIXED_TASK_SEED.value,
-  )
-  suite.suite_family = _SUITE_FAMILY.value
-
-  agent = _get_agent(env, _SUITE_FAMILY.value)
-
-  if _SUITE_FAMILY.value.startswith('miniwob'):
-    # MiniWoB pages change quickly, don't need to wait for screen to stabilize.
-    agent.transition_pause = _MINIWOB_TRANSITION_PAUSE
-  else:
-    agent.transition_pause = None
-
   if _CHECKPOINT_DIR.value:
     checkpoint_dir = _CHECKPOINT_DIR.value
   else:
     checkpoint_dir = checkpointer_lib.create_run_directory(_OUTPUT_PATH.value)
 
-  print(
-      f'Starting eval with agent {_AGENT_NAME.value} and writing to'
-      f' {checkpoint_dir}'
-  )
-  suite_utils.run(
-      suite,
-      agent,
-      checkpointer=checkpointer_lib.IncrementalCheckpointer(checkpoint_dir),
-      demo_mode=False,
-  )
-  print(
-      f'Finished running agent {_AGENT_NAME.value} on {_SUITE_FAMILY.value}'
-      f' family. Wrote to {checkpoint_dir}.'
-  )
-  env.close()
+  log_path = os.path.join(checkpoint_dir, 'run.log')
+  with _RunLogTee(log_path):
+    print(f'Writing run log to {log_path}')
+    env = env_launcher.load_and_setup_env(
+        console_port=_DEVICE_CONSOLE_PORT.value,
+        emulator_setup=_EMULATOR_SETUP.value,
+        adb_path=_ADB_PATH.value,
+    )
+    if _SETUP_ONLY.value:
+      print('Finished emulator setup. Exiting because --setup_only is set.')
+      env.close()
+      return
+
+    n_task_combinations = _N_TASK_COMBINATIONS.value
+    task_registry = registry.TaskRegistry()
+    suite = suite_utils.create_suite(
+        task_registry.get_registry(family=_SUITE_FAMILY.value),
+        n_task_combinations=n_task_combinations,
+        seed=_TASK_RANDOM_SEED.value,
+        tasks=_TASKS.value,
+        use_identical_params=_FIXED_TASK_SEED.value,
+    )
+    suite.suite_family = _SUITE_FAMILY.value
+
+    agent = _get_agent(env, _SUITE_FAMILY.value)
+
+    if _SUITE_FAMILY.value.startswith('miniwob'):
+      # MiniWoB pages change quickly, don't need to wait for screen to stabilize.
+      agent.transition_pause = _MINIWOB_TRANSITION_PAUSE
+    else:
+      agent.transition_pause = None
+
+    print(
+        f'Starting eval with agent {_AGENT_NAME.value} and writing to'
+        f' {checkpoint_dir}'
+    )
+    suite_utils.run(
+        suite,
+        agent,
+        checkpointer=checkpointer_lib.IncrementalCheckpointer(checkpoint_dir),
+        demo_mode=False,
+    )
+    print(
+        f'Finished running agent {_AGENT_NAME.value} on {_SUITE_FAMILY.value}'
+        f' family. Wrote to {checkpoint_dir}.'
+    )
+    env.close()
 
 
 def main(argv: Sequence[str]) -> None:
