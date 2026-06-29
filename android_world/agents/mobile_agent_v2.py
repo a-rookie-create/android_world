@@ -26,6 +26,7 @@ import copy
 import dataclasses
 import importlib
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -671,11 +672,8 @@ class MobileAgentV2Runner:
       self._controller.slide(adb_path, x1, y1, x2, y2)
       return f'swipe:{x1},{y1}->{x2},{y2}'
 
-    if 'Type' in action:
-      if '(text)' not in action:
-        text = action.split('(')[-1].split(')')[0]
-      else:
-        text = action.split(' "')[-1].split('"')[0]
+    if action.startswith('Type'):
+      text = self._parse_type_text(action)
       self._controller.type(adb_path, text)
       return 'type'
 
@@ -691,6 +689,23 @@ class MobileAgentV2Runner:
       return 'stop'
 
     return 'unknown_action'
+
+  def _parse_type_text(self, action: str) -> str:
+    """Extracts text from Mobile-Agent-v2 Type actions."""
+    patterns = (
+        r'^Type\s*\((?P<text>.*)\)\s*$',
+        r'^Type\s+"(?P<text>.*)"\s*$',
+        r"^Type\s+'(?P<text>.*)'\s*$",
+        r'^Type\s*:\s*Type\s+"(?P<text>.*)"\s*$',
+        r"^Type\s*:\s*Type\s+'(?P<text>.*)'\s*$",
+        r'^Type\s*\(text\)\s*:\s*Type\s+"(?P<text>.*)"\s*$',
+        r"^Type\s*\(text\)\s*:\s*Type\s+'(?P<text>.*)'\s*$",
+    )
+    for pattern in patterns:
+      match = re.fullmatch(pattern, action)
+      if match:
+        return match.group('text')
+    raise ValueError(f'Invalid Type action format: {action!r}')
 
   def _update_after_action(
       self,
