@@ -2,7 +2,7 @@
 # only. The non-docker implementation uses a requirements.txt file.
 
 [build-system]
-requires = ["setuptools>=61.0", "grpcio-tools==1.71.0"]
+requires = ["setuptools>=61.0,<81", "grpcio-tools==1.71.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -22,15 +22,24 @@ dependencies = [
     "immutabledict==2.0.0",
     "IPython",
     "jsonschema==4.17.3",
-    "numpy==1.26.3",
+    "matplotlib==3.6.1",
+    "numpy==1.26.4",
     "opencv-python",
-    "pandas==2.1.4",
+    "opencv-python-headless==4.10.0.84",
+    "pandas>=2.1.4",
+    "setuptools<81",
     "pydub",
     "python-Levenshtein",
     "pytest",
     "requests",
     "tenacity",
     "termcolor",
+    "tensorflow==2.19.0",
+    "keras==3.5.0",
+    "tf_keras==2.19.0",
+    "tf_slim",
+    "transformers==4.41.2",
+    "tokenizers==0.19.1",
     "fastapi",
     "uvicorn",
 ]
