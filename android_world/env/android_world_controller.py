@@ -16,11 +16,15 @@
 
 import contextlib
 import enum
+import http.client
 import os
+import tempfile
 import time
 from typing import Any
 from typing import cast
 from typing import Optional
+import urllib.error
+import urllib.request
 from absl import logging
 from android_env import env_interface
 from android_env import loader
@@ -107,6 +111,13 @@ _TASK_PATH = file_utils.convert_to_posix_path(
     file_utils.get_local_tmp_directory(), 'default.textproto'
 )
 DEFAULT_ADB_PATH = '~/Android/Sdk/platform-tools/adb'
+_A11Y_FORWARDER_APK_URL = (
+    'https://storage.googleapis.com/android_env-tasks/'
+    '2024.05.13-accessibility_forwarder.apk'
+)
+_A11Y_FORWARDER_APK_CACHE = os.path.join(
+    tempfile.gettempdir(), 'android_world_accessibility_forwarder.apk'
+)
 
 
 # UI tree-specific keys that are added to observations:
@@ -137,9 +148,61 @@ class A11yMethod(enum.Enum):
   NONE = 'none'
 
 
+def _get_accessibility_forwarder_apk_with_retries(
+    max_attempts: int = 5,
+    sleep_duration: float = 2.0,
+) -> bytes:
+  """Downloads the a11y forwarder APK with retries and a local cache."""
+  if os.path.exists(_A11Y_FORWARDER_APK_CACHE):
+    with open(_A11Y_FORWARDER_APK_CACHE, 'rb') as f:
+      cached_apk = f.read()
+    if cached_apk:
+      logging.info(
+          'Using cached accessibility forwarder APK: %s',
+          _A11Y_FORWARDER_APK_CACHE,
+      )
+      return cached_apk
+
+  last_error = None
+  for attempt in range(1, max_attempts + 1):
+    try:
+      logging.info(
+          'Downloading accessibility forwarder APK, attempt %d/%d.',
+          attempt,
+          max_attempts,
+      )
+      with urllib.request.urlopen(_A11Y_FORWARDER_APK_URL) as response:
+        apk = response.read()
+      with open(_A11Y_FORWARDER_APK_CACHE, 'wb') as f:
+        f.write(apk)
+      return apk
+    except (
+        http.client.IncompleteRead,
+        TimeoutError,
+        urllib.error.URLError,
+    ) as e:
+      last_error = e
+      logging.warning(
+          'Failed to download accessibility forwarder APK on attempt %d/%d: %s',
+          attempt,
+          max_attempts,
+          e,
+      )
+      if attempt < max_attempts:
+        time.sleep(sleep_duration)
+
+  raise RuntimeError(
+      'Could not download accessibility forwarder APK after '
+      f'{max_attempts} attempts.'
+  ) from last_error
+
+
 def apply_a11y_forwarder_app_wrapper(
     env: env_interface.AndroidEnvInterface, install_a11y_forwarding_app: bool
 ) -> env_interface.AndroidEnvInterface:
+  a11y_grpc_wrapper._get_accessibility_forwarder_apk = (  # pylint: disable=protected-access
+      _get_accessibility_forwarder_apk_with_retries
+  )
   return a11y_grpc_wrapper.A11yGrpcWrapper(
       env,
       install_a11y_forwarding=install_a11y_forwarding_app,
